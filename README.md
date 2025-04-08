@@ -2,8 +2,7 @@
 
 This project uses Demucs for audio separation and processing with a React (Vite) frontend and FastAPI backend.
 
-## usage
-
+## Usage
 # Back-End
 cd backend
 poetry run uvicorn app.main:app --reload
