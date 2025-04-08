@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-multipart
+demucs
+torch
+torchaudio
+ffmpeg-python
+pydantic
