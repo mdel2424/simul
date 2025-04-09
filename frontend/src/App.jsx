@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useRef } from "react";
 import axios from "axios";
 import {
   Container,
@@ -12,21 +12,21 @@ import {
   CircularProgress
 } from "@mui/material";
 
-const App: React.FC = () => {
-  const [vocalAudio, setVocalAudio] = useState<File | null>(null);
-  const [beatAudio, setBeatAudio] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [processedAudio, setProcessedAudio] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const App = () => {
+  const [vocalAudio, setVocalAudio] = useState(null);
+  const [beatAudio, setBeatAudio] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedAudio, setProcessedAudio] = useState(null);
+  const [error, setError] = useState(null);
+  const audioPlayerRef = useRef(null);
 
-
-  const handleVocalAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVocalAudioChange = (event) => {
     if (event.target.files && event.target.files[0]) {
       setVocalAudio(event.target.files[0]);
     }
   };
 
-  const handleBeatAudioChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBeatAudioChange = (event) => {
     if (event.target.files && event.target.files[0]) {
       setBeatAudio(event.target.files[0]);
     }
@@ -37,26 +37,73 @@ const App: React.FC = () => {
 
     setIsProcessing(true);
     setError(null);
+    setProcessedAudio(null);
 
     const formData = new FormData();
     formData.append('vocal_file', vocalAudio);
     formData.append('beat_file', beatAudio);
 
     try {
+      console.log("Sending request to process audio...");
+      console.log("Vocal file:", vocalAudio.name, "size:", vocalAudio.size);
+      console.log("Beat file:", beatAudio.name, "size:", beatAudio.size);
+      
       const response = await axios.post('/api/process-audio', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         responseType: 'blob',
       });
-
+      
+      console.log("Response received:", response);
+      
+      // Check if we got an error response (could be JSON)
+      if (response.headers['content-type'].includes('application/json')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const errorData = JSON.parse(reader.result);
+          setError(`Server error: ${errorData.error}`);
+          console.error('Server error details:', errorData.details);
+        };
+        reader.readAsText(response.data);
+        setIsProcessing(false);
+        return;
+      }
+      
       // Create a download URL for the processed audio
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'audio/mpeg' }));
       setProcessedAudio(url);
       setIsProcessing(false);
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.load();
+      }
+
     } catch (err) {
       console.error('Error processing audio:', err);
-      setError('An error occurred while processing the audio files.');
+      // Try to extract more error details if available
+      if (err.response && err.response.data) {
+        try {
+          if (err.response.data instanceof Blob) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              try {
+                const errorData = JSON.parse(reader.result);
+                setError(`Server error: ${errorData.error || 'Unknown error'}`);
+                console.error('Server error details:', errorData.details || 'No details available');
+              } catch (parseErr) {
+                setError(`Error processing audio: ${err.message}`);
+              }
+            };
+            reader.readAsText(err.response.data);
+          } else {
+            setError(`Error: ${err.response.data.error || err.message}`);
+          }
+        } catch (parseErr) {
+          setError(`Error processing audio: ${err.message}`);
+        }
+      } else {
+        setError(`Error processing audio: ${err.message}`);
+      }
       setIsProcessing(false);
     }
   };
@@ -84,7 +131,6 @@ const App: React.FC = () => {
               {vocalAudio && (
                 <Typography variant="caption" sx={{ mt: 1, textAlign: 'left' }}>
                   Selected: {vocalAudio.name}
-
                 </Typography>
               )}
             </FormControl>
@@ -111,7 +157,7 @@ const App: React.FC = () => {
               variant="contained"
               color="primary"
               onClick={handleSubmit}
-              disabled={!vocalAudio || !beatAudio}
+              disabled={!vocalAudio || !beatAudio || isProcessing}
               fullWidth
             >
               Process Audio Files
@@ -119,7 +165,6 @@ const App: React.FC = () => {
             {isProcessing && (
               <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <Typography>Processing audio files... This may take a few minutes.</Typography>
-                {/* You could add a progress indicator here */}
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
                   <CircularProgress />
                 </Box>
@@ -134,6 +179,18 @@ const App: React.FC = () => {
 
             {processedAudio && !isProcessing && (
               <Box sx={{ mt: 3, textAlign: 'center' }}>
+                {/* Audio player */}
+                <Box sx={{ width: '100%', mb: 2 }}>
+                  <audio 
+                    ref={audioPlayerRef}
+                    controls 
+                    style={{ width: '100%' }}
+                    src={processedAudio}
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
+                </Box>
+
                 <Button
                   variant="contained"
                   color="success"
