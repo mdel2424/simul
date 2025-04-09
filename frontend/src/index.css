@@ -24,10 +24,14 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  display: block; /* Changed from flex to block */
   min-width: 320px;
   min-height: 100vh;
+}
+
+#root {
+  width: 100%; /* Make sure the root div takes full width */
+  margin: 0 auto;
 }
 
 h1 {
